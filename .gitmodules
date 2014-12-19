@@ -1,0 +1,3 @@
+[submodule "CommonMark"]
+	path = CommonMark
+	url = https://github.com/jgm/CommonMark.git
