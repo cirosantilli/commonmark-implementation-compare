@@ -3,10 +3,10 @@ set -ev
 
 bin_dir='/usr/local/bin'
 
-# Dependencies.
+## Dependencies
 
   sudo apt-get update
-  sudo apt-get install -y build-essential bison curl git haskell-platform lua5.1 libglib2.0-dev mercurial unzip
+  sudo apt-get install -y build-essential bison cmake curl git haskell-platform lua5.1 libglib2.0-dev mercurial unzip
 
   # go
   # Requires: mercurial, bison.
@@ -34,18 +34,42 @@ bin_dir='/usr/local/bin'
   wget -O- https://bootstrap.pypa.io/get-pip.py | sudo python
 
   # ruby
+  # https://github.com/wayneeseguin/rvm
+  # blocked by https://github.com/wayneeseguin/rvm/issues/3110
+  gpg --keyserver hkp://keys.gnupg.net --recv-keys 409B6B1796C275462A1703113804BB82D39DC0E3
   curl -L https://get.rvm.io | bash -s stable
   . "$HOME/.rvm/scripts/rvm"
   rvm install 2.1.1
 
-# Engines.
+## Engines
 
   # blackfriday
   # TODO: use latest stable version.
   go get 'github.com/russross/blackfriday'
   go get 'github.com/russross/blackfriday-tool'
 
+  # cmark
+  dir='cmark'
+  cd '/tmp'
+  git clone 'https://github.com/jgm/CommonMark' "$dir"
+  cd "$dir"
+  git checkout "$(git describe --tags --abbrev=0)"
+  make
+  sudo mv 'build/src/cmark' "$bin_dir"
+  cd '..'
+  rm -rf -- "$dir"
+
+  # commonmark.js
+  # https://github.com/jgm/CommonMark
+  npm install -g 'commonmark'
+
+
+  # CommonMark-py
+  # https://github.com/rolandshoemaker/CommonMark-py
+  sudo pip install commonmark
+
   # hoedown
+  # https://github.com/hoedown/hoedown
   dir='hoedown'
   cd '/tmp'
   git clone 'https://github.com/hoedown/hoedown' "$dir"
@@ -57,10 +81,11 @@ bin_dir='/usr/local/bin'
   rm -rf -- "$dir"
 
   # kramdown
+  # https://github.com/gettalong/kramdown
   gem install 'kramdown'
 
   # lunamark
-  ## TODO get working. 'alt_getopt' not found.
+  # TODO get working. 'alt_getopt' not found.
   #dir='lunamark'
   #cd '/tmp'
   #git clone 'https://github.com/jgm/lunamark' "$dir"
@@ -73,6 +98,7 @@ bin_dir='/usr/local/bin'
   #rm -rf -- "$dir"
 
   # markdwn_pl
+  # http://daringfireball.net/projects/markdown/
   dir='Markdown_1.0.1'
   zip="${dir}.zip"
   cd '/tmp'
@@ -82,18 +108,23 @@ bin_dir='/usr/local/bin'
   rm -rf -- "$dir" "$zip"
 
   # markdown2
+  # https://github.com/trentm/python-markdown2
   sudo pip install 'markdown2'
 
   # marked
+  # https://github.com/chjj/marked
   npm install -g 'marked'
 
   # maruku
+  # https://github.com/bhollis/maruku
   gem install 'maruku'
 
-  # md2html
+  # markdownjs
+  # https://github.com/evilstreak/markdown-js
   npm install -g 'markdown'
 
   # multimarkdown
+  # https://github.com/fletcher/MultiMarkdown-4
   dir='MultiMarkdown-4'
   cd '/tmp'
   git clone --recursive 'https://github.com/fletcher/MultiMarkdown-4' "$dir"
@@ -105,9 +136,12 @@ bin_dir='/usr/local/bin'
   rm -rf -- "$dir"
 
   # pandoc
-  cabal install 'pandoc'
+  # https://github.com/jgm/pandoc
+  # TODO: 1Gb memory is not enough, on 2Gb it made my host halt.
+  #cabal install 'pandoc'
 
   # peg-markdown
+  # https://github.com/jgm/peg-markdown
   # Requires: libglib2.0-dev.
   dir='peg-markdown'
   cd '/tmp'
@@ -120,13 +154,18 @@ bin_dir='/usr/local/bin'
   rm -rf -- "$dir"
 
   # rdiscount
+  # https://github.com/davidfstr/rdiscount
   gem install 'rdiscount'
 
   # redcarpet
+  # https://github.com/vmg/redcarpet
   gem install 'redcarpet'
 
   # showdown
-  npm install -g 'showdown'
+  # https://github.com/showdownjs/showdown
+  npm install 'showdown'
+  # TODO the ideal global install is not working. Why?
+  #npm install -g 'showdown'
 
 # Required or else Karmdown and Maruku raise UTF-8 exceptions.
 # with the default `LC_ALL=en_US`.

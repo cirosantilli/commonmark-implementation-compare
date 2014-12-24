@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 import argparse
-import difflib
 import distutils.spawn
 import itertools
 import imp
@@ -49,16 +48,13 @@ def stdin_stdout_to_html(command, stdin):
     """
     process = subprocess.Popen(
         command,
-        shell  = False,
-        stdin  = subprocess.PIPE,
+        shell = False,
+        stdin = subprocess.PIPE,
         stdout = subprocess.PIPE,
         stderr = subprocess.PIPE,
         universal_newlines = True
     )
     stdout, stderr = process.communicate(stdin)
-    exit_status = process.wait()
-    if exit_status != 0:
-        raise Exception('Command exit status was not 0.')
     return stdout
 
 class Compiler(object):
@@ -79,18 +75,21 @@ class Compilers(object):
     - to_html
     """
 
-    # List of all the compiler classes. TODO DRY this up and look them up with instrospection.
+    # List of all the compiler classes.
+    # TODO DRY this up and look them up with instrospection.
     compiler_ids = [
-        'gfm',
         'blackfriday',
+        'cmark',
+        'commonmarkjs',
+        'gfm',
         'hoedown',
         'kramdown',
         'lunamark',
         'markdown2',
         'markdown_pl',
+        'markdownjs',
         'marked',
         'maruku',
-        'md2html',
         'multimarkdown',
         'pandoc',
         'peg_markdown',
@@ -102,7 +101,7 @@ class Compilers(object):
     class gfm(Compiler):
         """
         You **must** be authenticated to use this because this test suite has more than 50 tests.
-        <http://developer.github.com/v3/#rate-limiting>
+        <ettp://developer.github.com/v3/#rate-limiting>
         - authenticated: 60 requests per hour
         - unauthenticated requests: 5000 requests per hour
         """
@@ -134,118 +133,124 @@ class Compilers(object):
             return cls.command
 
     class blackfriday(CommandCompiler): command = ['blackfriday-tool']
+    class cmark(CommandCompiler): command = ['cmark']
     class hoedown(CommandCompiler): command = ['hoedown']
+    class commonmarkjs(CommandCompiler): command = ['commonmark']
     class kramdown(CommandCompiler): command = ['kramdown']
     class lunamark(CommandCompiler): command = ['lunamark']
     class markdown2(CommandCompiler): command = ['markdown2']
     class markdown_pl(CommandCompiler): command = ['Markdown.pl']
+    class markdownjs(CommandCompiler): command = ['md2html']
     class marked(CommandCompiler): command = ['marked']
     class maruku(CommandCompiler): command = ['maruku']
-    class md2html(CommandCompiler): command = ['md2html']
     class multimarkdown(CommandCompiler): command = ['multimarkdown']
     class pandoc(CommandCompiler): command = ['pandoc']
     class peg_markdown(CommandCompiler): command = ['peg-markdown']
     class rdiscount(CommandCompiler): command = ['rdiscount']
     class redcarpet(CommandCompiler): command = ['redcarpet']
-    class showdown(CommandCompiler): command = ['node', 'showdown-stdin.js']
+    class showdown(CommandCompiler): command = ['node', 'showdown-wrapper.js']
 
 def stdout_flush(s):
     sys.stdout.write(s)
     sys.stdout.flush()
 
 def run_tests(tests, compilers, args):
+    total_tests = 0
     total_compilers = len(compilers)
     errors = [0] * total_compilers
     times = [0.0] * total_compilers
     tests = itertools.ifilter(lambda test: re.match(args.filter,
                               test['section']), tests)
-    tests = list(tests)[:5]
     for test in tests:
+        total_tests += 1
+        single_test_errors = 0
         for i, compiler in enumerate(compilers):
             start_time = time.time()
-            if not args.number or total == args.number:
-                if (normalize.normalize_html(compiler.to_html(test['markdown'])) ==
-                    normalize.normalize_html(test['html'])):
-                    stdout_flush('.')
-                else:
-                    errors[i] += 1
-                    stdout_flush('F')
-            if i % 5 == 4:
+            if i != 0 and i % 5 == 0:
                 stdout_flush('  ')
+            if not args.number or total == args.number:
+                fail = False
+                try:
+                    if (normalize.normalize_html(compiler.to_html(test['markdown'])) !=
+                        normalize.normalize_html(test['html'])):
+                        # Debugging
+                        #print repr(normalize.normalize_html(compiler.to_html(test['markdown'])))
+                        #print repr(normalize.normalize_html(test['html']))
+                        fail = True
+                except UnicodeDecodeError:
+                    fail = True
+                if fail:
+                    errors[i] += 1
+                    single_test_errors += 1
+                    stdout_flush('F')
+                else:
+                    stdout_flush('.')
             times[i] += time.time() - start_time
         stdout_flush(' | ')
-        stdout_flush('{} {} {} {}\n'.format(test['example'], test['start_line'],
-                                            test['end_line'], test['section']))
-    return len(tests), errors, times
+        stdout_flush('{} {} {} {} {}\n'.format(
+            test['example'],
+            test['start_line'],
+            test['end_line'],
+            single_test_errors,
+            test['section'])
+        )
+    return total_tests, errors, times
 
 def compiler_legend(compiler_ids):
     output = ''
     digits = order(len(compiler_ids))
     for i, name in enumerate(compiler_ids):
-        output += '{:{}d} {}\n'.format(i + 1, digits, name)
-        if i % 5 == 4:
+        if i != 0 and i % 5 == 0:
             output += '\n'
+        output += '{:{}d} {}\n'.format(i + 1, digits, name)
     return output
 
 if __name__ == '__main__':
     all_compiler_ids = Compilers.compiler_ids
     parser = argparse.ArgumentParser(
-        description='Run markdown tests.',
-        epilog=r'''# Examples
+        description='Run CommonMark tests on multiple compilers.',
+        epilog=r'''Most compilers only need to be available in the PATH to be uesed.
+But we invite you to use the Vagrantfile setup
+distributed with the soruce for greater reproductibility.
+
+# Examples
 
 Run all enabled and available tests with summarized error format:
 
     {f}
 
-Each summary output line is of the form:
-
-    multimarkdown |.F..|   0.60s  4   1  25%
-
-Where:
+On the output:
 
 - `.` indicates a passing test
 - `F` indicates a failing test
-- `0.60s` is the wall time used to run all commands
-- `4` is the total number of tests
-- `1` is the total number of failing tests
-- `25%` is the percentage of failing tests
 
-Run all tests for the given compiler:
+Run all tests for the given compilers only:
 
-    {f} multimarkdown
+    {f} multimarkdown pandoc
 
 Run only tests whose section names match given regex filter:
 
-    {f} -p string
-    {f} -p string multimarkdown
+    {f} -f string
+    {f} -f string multimarkdown
 
-# Definitions
+# Enables vs Available
 
--   enabled: compilers may be disabled through the file `{config_file}`.
+-   Enabled: compilers may be disabled through the file `{config_file}`.
 
--   available: compilers are said to be available
+-   Available: compilers are said to be available
     if they can be used if the user wishes.
 
     For command line utilies, this means that they are installed and in `PATH`.
 
     For REST APIs, this means that the internet connection and the server are working.
 
-# Normalization
+# No individual test output
 
-In order for output comparison to be meaningful, HTML outputs must be normalized
-before comparison.
+This program does not run tests for individual compilers
+and output the errors because CommonMark already does that well with:
 
-The chosen normalization is heuristic, and goes beyond simple DOM tree transformation:
-its goal is to normalize outputs that render equally in most browsers as equal,
-and different DOM trees may render exactly the same on most browsers.
+    ./test/spec_test.py --program 'pandoc'
 
-Normalized aspects include:
-
-- convert multiple consecutive whitespaces to a single space
-- sort attributes alphabetically
-- remove attributes such as `id` or `class` which are added by many compilers
-- self-closing tags are transformed into regular tags, as they are equivalent in HTML5
-- references are converted to Unicode
 '''.format(f=sys.argv[0], config_file=config_file), # f contains command name.
         formatter_class=argparse.RawTextHelpFormatter, # Keep newlines.
     )
@@ -277,25 +282,25 @@ The number of a test is affected by filtering options such as `-s`.'''
         default='',
         help='''Only run tests whose section name matches the given regex.'''
     )
-    # TODO allow this to take multiple arguments.
-    # Single argument is useless as spec_test.py can be used directly.
-    #parser.add_argument(
-        #'compiler',
-        #choices=all_compiler_ids,
-        #nargs='?',
-        #help='''If given, only run tests for this compiler even is disabled,
-        #and print actual / expected IO for each failing test.
-        #Else, run all compilers which are both enabled and available,
-        #and print only summarized output.'''
-    #)
+    parser.add_argument(
+        'compilers',
+        choices=(all_compiler_ids + [[]]),
+        nargs='*',
+        help='''If given, only run tests for the given compilers even if they are disabled.
+        Else, run all compilers which are both enabled and available.
+        This option overrides -a'''
+    )
     args = parser.parse_args()
 
     disabled_by_conf = config['run_all_disable']
-    if args.enable_all:
-        enabled_compiler_ids = all_compiler_ids
+    if args.compilers:
+        enabled_compiler_ids = args.compilers
     else:
-        enabled_compiler_ids = \
-            filter(lambda e: not e in disabled_by_conf, all_compiler_ids)
+        if args.enable_all:
+            enabled_compiler_ids = all_compiler_ids
+        else:
+            enabled_compiler_ids = \
+                filter(lambda e: not e in disabled_by_conf, all_compiler_ids)
     enabled_and_available_compiler_ids = \
         filter(lambda e: getattr(Compilers, e).available(), enabled_compiler_ids)
     enabled_and_not_available_compiler_ids = \
@@ -329,18 +334,25 @@ The number of a test is affected by filtering options such as `-s`.'''
             print compiler_legend
             compilers = [getattr(Compilers, compiler_name)
                          for compiler_name in enabled_and_available_compiler_ids]
+            print 'Test results | Test number | Start line | End line | Failed tests | Section'
+            print
             total_tests, errors, times = run_tests(spec_tests.get_tests(spec_path), compilers, args)
             print
-            print compiler_legend
-            print 'Total tests: ' + str(total_tests)
+            # print compiler_legend
+            print 'Compiler id | Total time | Total errors | Error percent'
             print
-            print 'Total time / Total errors / Error percent'
-            digits = order(len(enabled_and_available_compiler_ids))
+            max_id_len = len(max(enabled_and_available_compiler_ids, key=len))
             for i, compiler in enumerate(compilers):
                 if total_tests == 0:
                     percent = 0
                 else:
                     percent = int(errors[i]/float(total_tests)*100)
-                    print '{:{}d} {:>.4f}s {} {}%'.format(i + 1, digits, times[i], errors[i], percent)
+                    print '{:<{}} {:>8.4f}s {:>4} {:>3}%'.format(
+                        enabled_and_available_compiler_ids[i],
+                        max_id_len,
+                        times[i],
+                        errors[i],
+                        percent
+                    )
         else:
             print 'No compilers are enabled. Install or enable some.'

@@ -1,0 +1,3 @@
+*.pyc
+.vagrant
+node_modules
